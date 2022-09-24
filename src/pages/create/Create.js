@@ -4,6 +4,10 @@ import "./Create.css";
 import React, { useEffect, useState } from "react";
 import Select from "react-select";
 import { useCollection } from "../../hooks/useCollection";
+import { timestamp } from "../../firebase/config";
+import { useAuthContext } from "../../hooks/useAuthContext";
+import { useFirestore } from "../../hooks/useFirestore";
+import { useHistory } from "react-router-dom";
 
 const categories = [
   { value: "design", label: "Design" },
@@ -20,6 +24,10 @@ export default function Create() {
   const [assignedUsers, setAssignedUsers] = useState([]);
   const { documents } = useCollection("users");
   const [users, setUsers] = useState([]);
+  const [formError, setFormError] = useState(null);
+  const { user } = useAuthContext();
+  const { addDocument, response } = useFirestore("projects");
+  const history = useHistory();
 
   useEffect(() => {
     if (documents) {
@@ -30,9 +38,47 @@ export default function Create() {
     }
   }, [documents]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log(name, details, dueDate, category.value, assignedUsers);
+    setFormError(null);
+
+    if (!category) {
+      setFormError("Please select a category.");
+      return;
+    }
+    if (assignedUsers.length < 1) {
+      setFormError("Please assign user/users to the project.");
+      return;
+    }
+
+    const createdBy = {
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      id: user.uid,
+    };
+
+    const assignedUsersList = assignedUsers.map((user) => {
+      return {
+        displayName: user.value.displayName,
+        photoURL: user.value.photoURL,
+        id: user.value.id,
+      };
+    });
+
+    const project = {
+      name,
+      details,
+      category: category.value,
+      dueDate: timestamp.fromDate(new Date(dueDate)),
+      comments: [],
+      assignedUsersList: assignedUsersList,
+      createdBy: createdBy,
+    };
+
+    await addDocument(project);
+    if (!response.error) {
+      history.push("/");
+    }
   };
   return (
     <div className='create-form'>
@@ -81,6 +127,7 @@ export default function Create() {
           />
         </label>
         <button className='btn'>Add a Project</button>
+        {formError && <p className='error'>{formError}</p>}
       </form>
     </div>
   );
